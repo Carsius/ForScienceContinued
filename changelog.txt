@@ -1,3 +1,8 @@
+v 0.27
+ * Added:
+  * Option to only move rerunable experiments
+ * Mics:
+  * KSP 1.0 recompile
 v 0.26.1
  * KerboKatzUtilities compatibility release 
 v 0.26

@@ -17,6 +17,7 @@
  *		  fix bugs that i didnt find yet
  */
 
+using KerboKatz.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,41 +28,42 @@ namespace KerboKatz
   [KSPAddon(KSPAddon.Startup.Flight, false)]
   partial class ForScienceContinued : KerboKatzBase
   {
-    private bool dataIsInContainer                         = false;
-    private bool IsDataToCollect                           = false;
-    private CelestialBody currentBody                      = null;
-    private Dictionary<string, double> runningExperiments  = new Dictionary<string, double>();
+    private bool dataIsInContainer = false;
+    private bool IsDataToCollect = false;
+    private CelestialBody currentBody = null;
+    private Dictionary<string, double> runningExperiments = new Dictionary<string, double>();
     private Dictionary<string, int> shipCotainsExperiments = new Dictionary<string, int>();
-    private double lastUpdate                              = 0;
-    private ExperimentSituations currentSituation          = 0;
+    private double lastUpdate = 0;
+    private ExperimentSituations currentSituation = 0;
     private int experimentLimit;
     private int experimentNumber;
-    private KerbalEVA kerbalEVAPart                        = null;
-    private List<KerbalEVA> kerbalEVAParts                 = null;
-    private List<ModuleScienceContainer> containerList     = null;
-    private List<ModuleScienceExperiment> experimentList   = null;
-    private List<String> startedExperiments                = new List<String>();
-    private List<String> toolbarStrings                    = new List<String>();
-    private ModuleScienceContainer container               = null;
-    private PackedSprite sprite; // animations: Spin, Unlit
+    private KerbalEVA kerbalEVAPart = null;
+    private List<KerbalEVA> kerbalEVAParts = null;
+    private List<ModuleScienceContainer> containerList = null;
+    private List<ModuleScienceExperiment> experimentList = null;
+    private List<String> startedExperiments = new List<String>();
+    private List<String> toolbarStrings = new List<String>();
+    private ModuleScienceContainer container = null;
     private ScienceExperiment experiment;
-    private string currentBiome                            = null;
-    private Vessel currentVessel                           = null;
+    private string currentBiome = null;
+    private Vessel currentVessel = null;
     private Vessel parentVessel;
 
     public ForScienceContinued()
     {
       modName = "ForScienceContinued";
-      requiresUtilities = new Version(1, 0, 4);
+      tooltip = "Use left click to turn ForScience on/off.\n Use right click to open the settings menu.";
+      requiresUtilities = new Version(1, 2, 0);
     }
-    public override void Start()
+
+    protected override void Started()
     {
       if (!(HighLogic.CurrentGame.Mode == Game.Modes.CAREER || HighLogic.CurrentGame.Mode == Game.Modes.SCIENCE_SANDBOX))
       {
         Destroy(this);
         return;
       }
-      base.Start();
+
       currentSettings.setDefault("scienceCutoff", "2");
       currentSettings.setDefault("spriteAnimationFPS", "25");
       currentSettings.setDefault("autoScience", "false");
@@ -69,21 +71,24 @@ namespace KerboKatz
       currentSettings.setDefault("transferScience", "false");
       currentSettings.setDefault("showSettings", "false");
       currentSettings.setDefault("doEVAonlyIfOnGroundWhenLanded", "true");
-      currentSettings.setDefault("windowX", "99999");
-      currentSettings.setDefault("windowY", "38");
+      currentSettings.setDefault("transferAll", "false");
       windowPosition.x = currentSettings.getFloat("windowX");
       windowPosition.y = currentSettings.getFloat("windowY");
 
-      scienceCutoff                 = currentSettings.getString("scienceCutoff");
-      spriteAnimationFPS            = currentSettings.getString("spriteAnimationFPS");
-      transferScience               = currentSettings.getBool("transferScience");
+      transferAll = currentSettings.getBool("transferAll");
+      scienceCutoff = currentSettings.getString("scienceCutoff");
+      spriteAnimationFPS = currentSettings.getString("spriteAnimationFPS");
+      transferScience = currentSettings.getBool("transferScience");
       doEVAonlyIfOnGroundWhenLanded = currentSettings.getBool("doEVAonlyIfOnGroundWhenLanded");
-      runOneTimeScience             = currentSettings.getBool("runOneTimeScience");
+      runOneTimeScience = currentSettings.getBool("runOneTimeScience");
 
       GameEvents.onCrewOnEva.Add(GoingEva);
+
+      setAppLauncherScenes(ApplicationLauncher.AppScenes.FLIGHT);
+      updateFrameCheck();
     }
 
-    public override void OnDestroy()
+    protected override void OnDestroy()
     {
       GameEvents.onCrewOnEva.Remove(GoingEva);
       if (currentSettings != null)
@@ -98,62 +103,51 @@ namespace KerboKatz
       parentVessel = parts.from.vessel;
     }
 
-    public override void OnGuiAppLauncherReady()
+    private int FrameCount = 56;
+    private float CurrentFrame = 0;
+    private double lastFrameCheck;
+    private float frameCheck;
+    private bool setTo56;
+    public void Update()
     {
-      //base.OnGuiAppLauncherReady();
-      sprite = PackedSprite.Create("ForScience.Button.Sprite", Vector3.zero);
-      sprite.SetMaterial(new Material(Shader.Find("Sprite/Vertex Colored")) { mainTexture = Utilities.getTexture("icon", "ForScienceContinued/Textures")});
-      sprite.renderer.sharedMaterial.mainTexture.filterMode = FilterMode.Point;
-      sprite.Setup(38f, 38f);
-      sprite.SetFramerate(currentSettings.getFloat("spriteAnimationFPS"));
-      sprite.SetAnchor(SpriteRoot.ANCHOR_METHOD.UPPER_LEFT);
-      sprite.gameObject.layer = LayerMask.NameToLayer("EzGUI_UI");
-      // normal state
-      UVAnimation normal = new UVAnimation() { name = "Stopped", loopCycles = 0, framerate = currentSettings.getFloat("spriteAnimationFPS") };
-      normal.BuildUVAnim(sprite.PixelCoordToUVCoord(0 * 38, 9 * 38), sprite.PixelSpaceToUVSpace(38, 38), 1, 1, 1);
-
-      // animated state
-      UVAnimation anim = new UVAnimation() { name = "Spinning", loopCycles = -1, framerate = currentSettings.getFloat("spriteAnimationFPS") };
-      anim.BuildWrappedUVAnim(new Vector2(0, sprite.PixelCoordToUVCoord(0, 38).y), sprite.PixelSpaceToUVSpace(38, 38), 56);
-
-      // add animations to button
-      sprite.AddAnimation(normal);
-      sprite.AddAnimation(anim);
-
       if (currentSettings.getBool("autoScience"))
       {
-        setAppLauncherAnimation("on");
+        if (lastFrameCheck + frameCheck < Time.time)
+        {
+          var frame = Time.deltaTime / frameCheck;
+          if (CurrentFrame + frame < FrameCount - 1)
+            CurrentFrame += frame;
+          else
+            CurrentFrame = 0;
+          setIcon(Utilities.getTexture("icon" + (int)CurrentFrame, "ForScienceContinued/Textures"));
+          lastFrameCheck = Time.time;
+        }
+        if (setTo56)
+          setTo56 = false;
       }
-      else
+      else if (!setTo56)
       {
-        setAppLauncherAnimation("off");
+        setIcon(Utilities.getTexture("icon56", "ForScienceContinued/Textures"));
+        setTo56 = true;
       }
-
-      button = ApplicationLauncher.Instance.AddModApplication(
-          toggleAutoScience, 	//RUIToggleButton.onTrue
-          toggleAutoScience,	//RUIToggleButton.onFalse
-          null, //RUIToggleButton.OnHover
-          null, //RUIToggleButton.onHoverOut
-          null, //RUIToggleButton.onEnable
-          null, //RUIToggleButton.onDisable
-          ApplicationLauncher.AppScenes.FLIGHT, //visibleInScenes
-          sprite//texture
-      );
     }
 
-    private void toggleAutoScience()
+    private void updateFrameCheck()
+    {
+      frameCheck = 1 / currentSettings.getFloat("spriteAnimationFPS");
+    }
+
+    protected override void onToolbar()
     {
       if (Input.GetMouseButtonUp(0))
       {//left mouse button
         if (currentSettings.getBool("autoScience"))
         {
           currentSettings.set("autoScience", false);
-          setAppLauncherAnimation("off");
         }
         else
         {
           currentSettings.set("autoScience", true);
-          setAppLauncherAnimation("on");
         }
       }
       else if (Input.GetMouseButtonUp(1))//right mouse button
@@ -165,29 +159,11 @@ namespace KerboKatz
         else
         {
           //only move window when the position was not set in the settings
-          if (windowPosition.x == 0 && windowPosition.y == 0)
-          {
-            windowPosition.x = Input.mousePosition.x;
-            windowPosition.y = 38;
-          }
+          windowPosition.UpdatePosition = Rectangle.updateType.Cursor;
           currentSettings.set("showSettings", true);
         }
       }
       currentSettings.save();
-    }
-
-    private void setAppLauncherAnimation(string type)
-    {
-      if (type == "on")
-      {
-        sprite.PlayAnim("Spinning");
-        sprite.SetFramerate(currentSettings.getFloat("spriteAnimationFPS"));
-      }
-      else
-      {
-        sprite.PlayAnim("Stopped");
-        sprite.PauseAnim();
-      }
     }
 
     // void Update()
@@ -219,8 +195,25 @@ namespace KerboKatz
       if (container == null)
         return;
       Utilities.debug(modName, "Tranfering science to container.");
-      container.StoreData(experimentList.Cast<IScienceDataContainer>().ToList(), false);
-
+      if (currentSettings.getBool("transferAll"))
+      {
+        container.StoreData(experimentList.Cast<IScienceDataContainer>().ToList(), false);
+      }
+      else
+      {
+        if (experimentList.Count > 0)
+        {
+          var scienceContainer = new List<IScienceDataContainer>();
+          foreach (var thisExperiment in experimentList.Cast<IScienceDataContainer>())
+          {
+            if (thisExperiment.IsRerunnable())
+            {
+              scienceContainer.Add(thisExperiment);
+            }
+          }
+          container.StoreData(scienceContainer, false);
+        }
+      }
       IsDataToCollect = false;
     }
 
@@ -250,8 +243,7 @@ namespace KerboKatz
           fixBiome = currentBiome;
         }
         var currentScienceSubject = ResearchAndDevelopment.GetExperimentSubject(experiment, currentSituation, currentBody, fixBiome);
-        float currentScienceValue = Utilities.getScienceValue(shipCotainsExperiments,experiment, currentScienceSubject);
-
+        float currentScienceValue = Utilities.Science.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
         if (((!currentExperiment.rerunnable && currentSettings.getBool("runOneTimeScience")) || currentExperiment.rerunnable) &&
             experiment.IsAvailableWhile(currentSituation, currentBody) &&
             currentScienceValue >= currentSettings.getFloat("scienceCutoff") &&
@@ -305,7 +297,7 @@ namespace KerboKatz
                   shipCotainsExperiments[currentScienceSubject.id] += experimentNumber;
                 else
                   shipCotainsExperiments.Add(currentScienceSubject.id, experimentNumber + 1);
-                currentScienceValue = Utilities.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
+                currentScienceValue = Utilities.Science.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
                 Utilities.debug(modName, "Experiment is a DMagic Orbital Science experiment. Science value changed to: " + currentScienceValue);
                 if (currentScienceValue < currentSettings.getFloat("scienceCutoff"))
                 {
@@ -345,6 +337,10 @@ namespace KerboKatz
               shipCotainsExperiments.Add(currentScienceSubject.id, 1);
             IsDataToCollect = true;
           }
+        }
+        else if (currentExperiment.Deployed && currentSettings.getBool("transferScience"))
+        {
+          IsDataToCollect = true;
         }
       }
     }
@@ -405,6 +401,5 @@ namespace KerboKatz
         }
       }
     }
-
   }
 }

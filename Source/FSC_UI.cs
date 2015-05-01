@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using KerboKatz.Extensions;
 using UnityEngine;
 
 namespace KerboKatz
@@ -11,7 +9,7 @@ namespace KerboKatz
     private GUIStyle containerStyle;
     private GUIStyle numberFieldStyle;
     private GUIStyle windowStyle, labelStyle, toggleStyle, textStyle;
-    private Rect windowPosition = new Rect(0f, 0f, 0f, 0f);
+    private Rectangle windowPosition = new Rectangle(Rectangle.updateType.Cursor);
     private float lastWindowHeight;
     private bool doEVAonlyIfOnGroundWhenLanded;
     private bool initStyle = false;
@@ -22,26 +20,30 @@ namespace KerboKatz
     private bool setWindowShrinked;
     private bool transferScience;
     private int toolbarInt;
+    private int windowID = 1702000100;
+    private bool transferAll;
 
     private void OnGUI()
     {
       if (!initStyle)
         InitStyle();
-      if (HighLogic.LoadedScene == GameScenes.FLIGHT && currentSettings.getBool("showSettings"))
+      Utilities.UI.createWindow(currentSettings.getBool("showSettings"), windowID, ref windowPosition, MainWindow, "For Science", windowStyle);
+      if (currentSettings.getBool("showSettings"))
       {
-        if (windowPosition.height != 0 && windowPosition.height != lastWindowHeight || !windowShrinked)
+        if (Event.current.type == EventType.Repaint)
         {
-          windowPosition.height = 0;
-          windowShrinked = true;
+          if (windowPosition.height != 0 && windowPosition.height != lastWindowHeight || !windowShrinked)
+          {
+            windowPosition.height = 0;
+            windowShrinked = true;
+          }
+          if (windowPosition.height != 0)
+          {
+            lastWindowHeight = windowPosition.height;
+          }
         }
-        windowPosition = GUILayout.Window(104234, windowPosition, MainWindow, "For Science", windowStyle);
-        Utilities.clampToScreen(ref windowPosition);
-        if (windowPosition.height != 0)
-        {
-          lastWindowHeight = windowPosition.height;
-        }
-        Utilities.showTooltip();
       }
+      Utilities.UI.showTooltip();
     }
 
     private void InitStyle()
@@ -50,7 +52,7 @@ namespace KerboKatz
       labelStyle.stretchWidth = true;
 
       windowStyle = new GUIStyle(HighLogic.Skin.window);
-      windowStyle.fixedWidth = 250f;
+      windowStyle.fixedWidth = 250;
       windowStyle.padding.left = 0;
 
       toggleStyle = new GUIStyle(HighLogic.Skin.toggle);
@@ -58,22 +60,22 @@ namespace KerboKatz
       toggleStyle.active.textColor = labelStyle.normal.textColor;
 
       textStyle = new GUIStyle(HighLogic.Skin.label);
-      textStyle.fixedWidth = 100f;
+      textStyle.fixedWidth = 100;
       textStyle.margin.left = 10;
 
       containerStyle = new GUIStyle(GUI.skin.button);
-      containerStyle.fixedWidth = 230f;
+      containerStyle.fixedWidth = 230;
       containerStyle.margin.left = 10;
 
       numberFieldStyle = new GUIStyle(HighLogic.Skin.box);
-      numberFieldStyle.fixedWidth = 52f;
-      numberFieldStyle.fixedHeight = 22f;
+      numberFieldStyle.fixedWidth = 52;
+      numberFieldStyle.fixedHeight = 22;
       numberFieldStyle.alignment = TextAnchor.MiddleCenter;
       numberFieldStyle.margin.left = 95;
       numberFieldStyle.padding.right = 7;
 
       buttonStyle = new GUIStyle(GUI.skin.button);
-      buttonStyle.fixedWidth = 127f;
+      buttonStyle.fixedWidth = 127;
 
       initStyle = true;
     }
@@ -82,11 +84,11 @@ namespace KerboKatz
     {
       GUILayout.BeginVertical();
       GUILayout.BeginHorizontal();
-      Utilities.createLabel("Animation FPS:", textStyle, "set to 0 to disable");
+      Utilities.UI.createLabel("Animation FPS:", textStyle, "set to 0 to disable");
       spriteAnimationFPS = Utilities.getOnlyNumbers(GUILayout.TextField(spriteAnimationFPS, 5, numberFieldStyle));
       GUILayout.EndHorizontal();
       GUILayout.BeginHorizontal();
-      Utilities.createLabel("Science cutoff:", textStyle, "Doesn't run any science experiment if it's value less than this number.");
+      Utilities.UI.createLabel("Science cutoff:", textStyle, "Doesn't run any science experiment if it's value less than this number.");
       scienceCutoff = Utilities.getOnlyNumbers(GUILayout.TextField(scienceCutoff, 5, numberFieldStyle));
       GUILayout.EndHorizontal();
       if (GUILayout.Toggle(doEVAonlyIfOnGroundWhenLanded, new GUIContent("Restrict EVA-Report", "If this option is turned on and the vessel is landed/splashed the kerbal wont do the EVA-Report if he isnt on the ground."), toggleStyle))
@@ -109,6 +111,14 @@ namespace KerboKatz
       {
         transferScience = true;
         GUILayout.BeginVertical();
+        if (Utilities.UI.createToggle("Transfer all experiments", transferAll, toggleStyle, "If you turn this on all experiments,including non rerunable, will be transfered to your selected science container."))
+        {
+          transferAll = true;
+        }
+        else
+        {
+          transferAll = false;
+        }
         if (toolbarStrings != null)
           toolbarInt = GUILayout.SelectionGrid(toolbarInt, toolbarStrings.ToArray(), 1, containerStyle);
         GUILayout.EndVertical();
@@ -123,25 +133,29 @@ namespace KerboKatz
         }
         transferScience = false;
       }
+      Utilities.UI.createOptionSwitcher("Use:", Toolbar.toolbarOptions, ref toolbarSelected);
       GUILayout.BeginHorizontal();
       GUILayout.FlexibleSpace();
       if (GUILayout.Button("Save", buttonStyle))
       {
+        updateToolbarBool();
         currentSettings.set("scienceCutoff", scienceCutoff);
         currentSettings.set("spriteAnimationFPS", spriteAnimationFPS);
         currentSettings.set("transferScience", transferScience);
         currentSettings.set("doEVAonlyIfOnGroundWhenLanded", doEVAonlyIfOnGroundWhenLanded);
         currentSettings.set("runOneTimeScience", runOneTimeScience);
+        currentSettings.set("transferAll", transferAll);
         currentSettings.save();
         currentSettings.set("showSettings", false);
         if (containerList != null)
           container = containerList[toolbarInt];
-        sprite.SetFramerate(currentSettings.getFloat("spriteAnimationFPS"));
+
+        updateFrameCheck();
       }
       GUILayout.FlexibleSpace();
       GUILayout.EndHorizontal();
       GUILayout.EndVertical();
-      Utilities.updateTooltipAndDrag();
+      Utilities.UI.updateTooltipAndDrag();
     }
   }
 }
