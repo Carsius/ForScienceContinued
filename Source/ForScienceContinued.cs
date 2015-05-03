@@ -72,9 +72,11 @@ namespace KerboKatz
       currentSettings.setDefault("showSettings", "false");
       currentSettings.setDefault("doEVAonlyIfOnGroundWhenLanded", "true");
       currentSettings.setDefault("transferAll", "false");
+      currentSettings.setDefault("dumpDuplicateResults", "false");
       windowPosition.x = currentSettings.getFloat("windowX");
       windowPosition.y = currentSettings.getFloat("windowY");
 
+      dumpDuplicateResults = currentSettings.getBool("dumpDuplicateResults");
       transferAll = currentSettings.getBool("transferAll");
       scienceCutoff = currentSettings.getString("scienceCutoff");
       spriteAnimationFPS = currentSettings.getString("spriteAnimationFPS");
@@ -108,6 +110,7 @@ namespace KerboKatz
     private double lastFrameCheck;
     private float frameCheck;
     private bool setTo56;
+    private bool dumpDuplicateResults;
     public void Update()
     {
       if (currentSettings.getBool("autoScience"))
@@ -194,10 +197,10 @@ namespace KerboKatz
     {
       if (container == null)
         return;
-      Utilities.debug(modName, "Tranfering science to container.");
       if (currentSettings.getBool("transferAll"))
       {
-        container.StoreData(experimentList.Cast<IScienceDataContainer>().ToList(), false);
+        Utilities.debug(modName, "Tranfering science to container.");
+        container.StoreData(experimentList.Cast<IScienceDataContainer>().ToList(), currentSettings.getBool("dumpDuplicateResults"));
       }
       else
       {
@@ -211,7 +214,8 @@ namespace KerboKatz
               scienceContainer.Add(thisExperiment);
             }
           }
-          container.StoreData(scienceContainer, false);
+          Utilities.debug(modName, "Tranfering science to container.");
+          container.StoreData(scienceContainer, currentSettings.getBool("dumpDuplicateResults"));
         }
       }
       IsDataToCollect = false;
@@ -258,7 +262,8 @@ namespace KerboKatz
           }
 
           dataIsInContainer = false;
-          checkDataInContainer(currentScienceSubject, container.GetData());
+          if (container != null)
+            checkDataInContainer(currentScienceSubject, container.GetData());
           checkDataInContainer(currentScienceSubject, currentExperiment.GetData());
 
           #region try-catch for DMagic Orbital Science
@@ -383,7 +388,7 @@ namespace KerboKatz
         addToExpermientedList(currentContainer.GetData());
         toolbarStrings.Add(currentContainer.part.partInfo.title);
       }
-      if (container == null && containerList != null)
+      if (container == null && containerList != null && containerList.Count > 0)
         container = containerList[0];
     }
 

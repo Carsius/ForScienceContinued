@@ -119,6 +119,14 @@ namespace KerboKatz
         {
           transferAll = false;
         }
+        if (Utilities.UI.createToggle("Dump duplicate results", dumpDuplicateResults, toggleStyle, "If you turn this on experiments that are already stored will be dumped over board."))
+        {
+          dumpDuplicateResults = true;
+        }
+        else
+        {
+          dumpDuplicateResults = false;
+        }
         if (toolbarStrings != null)
           toolbarInt = GUILayout.SelectionGrid(toolbarInt, toolbarStrings.ToArray(), 1, containerStyle);
         GUILayout.EndVertical();
@@ -145,6 +153,7 @@ namespace KerboKatz
         currentSettings.set("doEVAonlyIfOnGroundWhenLanded", doEVAonlyIfOnGroundWhenLanded);
         currentSettings.set("runOneTimeScience", runOneTimeScience);
         currentSettings.set("transferAll", transferAll);
+        currentSettings.set("dumpDuplicateResults", dumpDuplicateResults);
         currentSettings.save();
         currentSettings.set("showSettings", false);
         if (containerList != null)

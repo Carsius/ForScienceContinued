@@ -1,3 +1,10 @@
+v 0.27.2
+ * Added:
+  * Option to dump duplicate results
+ * Fixed:
+  * Issues with probe cores
+v 0.27.1
+ * Recompiled for KSP 1.0.1 and KerboKatzUtilities 1.2.1 
 v 0.27
  * Added:
   * Option to only move rerunable experiments
