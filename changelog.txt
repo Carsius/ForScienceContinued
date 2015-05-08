@@ -1,3 +1,5 @@
+v 1.0.1
+ * Fixed non rerunable science experiments being transfered in some cases
 v 1.0.0
  * Major rewrite in the code that handles the availability of experiments
  * Fixed special biomes bug that caused experiments to run even though they gave 0 science //Thanks xEvilReeperx

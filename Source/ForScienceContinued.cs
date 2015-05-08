@@ -273,7 +273,7 @@ namespace KerboKatz
       {
         var scienceContainer = new List<IScienceDataContainer>();
         var containingData = container.GetData();
-        foreach (var thisExperiment in experimentList.Cast<IScienceDataContainer>())
+        foreach (var thisExperiment in experimentList)
         {
           if (canTransfer(thisExperiment, containingData))
           {
@@ -287,7 +287,7 @@ namespace KerboKatz
     }
 
 
-    private bool canTransfer(IScienceDataContainer thisExperiment, ScienceData[] containingData)
+    private bool canTransfer(ModuleScienceExperiment thisExperiment, ScienceData[] containingData)
     {
       if (!thisExperiment.IsRerunnable())
       {
