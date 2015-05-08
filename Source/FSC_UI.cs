@@ -12,6 +12,8 @@ namespace KerboKatz
     private Rectangle windowPosition = new Rectangle(Rectangle.updateType.Cursor);
     private float lastWindowHeight;
     private bool doEVAonlyIfOnGroundWhenLanded;
+    private bool dumpDuplicateResults;
+    private bool resetExperiments;
     private bool initStyle = false;
     private string scienceCutoff;
     private string spriteAnimationFPS;
@@ -107,6 +109,14 @@ namespace KerboKatz
       {
         runOneTimeScience = false;
       }
+      if (GUILayout.Toggle(resetExperiments, new GUIContent("Reset experiments automatically", "This option only works if you have a Scientis on board"), toggleStyle))
+      {
+        resetExperiments = true;
+      }
+      else
+      {
+        resetExperiments = false;
+      }
       if (GUILayout.Toggle(transferScience, new GUIContent("Transfer science to container", "Transfers all the science from experiments to the selected container.\nWARNING: makes experiments unoperable if used with \"Run one-time only science\""), toggleStyle))
       {
         transferScience = true;
@@ -147,6 +157,7 @@ namespace KerboKatz
       if (GUILayout.Button("Save", buttonStyle))
       {
         updateToolbarBool();
+        currentSettings.set("resetExperiments", resetExperiments);
         currentSettings.set("scienceCutoff", scienceCutoff);
         currentSettings.set("spriteAnimationFPS", spriteAnimationFPS);
         currentSettings.set("transferScience", transferScience);
