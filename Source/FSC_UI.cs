@@ -22,7 +22,7 @@ namespace KerboKatz
     private bool setWindowShrinked;
     private bool transferScience;
     private int toolbarInt;
-    private int windowID = 1702000100;
+    private static int windowID = Utilities.UI.getNewWindowID;
     private bool transferAll;
 
     private void OnGUI()

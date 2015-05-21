@@ -21,6 +21,7 @@ using KerboKatz.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEngine;
 
 namespace KerboKatz
@@ -159,7 +160,7 @@ namespace KerboKatz
         addToExpermientedList(currentContainer.GetData());
         toolbarStrings.Add(currentContainer.part.partInfo.title);
       }
-      if ((container == null || container.vessel != currentVessel) && containerList != null && containerList.Count > 0 )
+      if ((container == null || container.vessel != currentVessel) && containerList != null && containerList.Count > 0)
         container = containerList[0];
     }
 
@@ -286,7 +287,6 @@ namespace KerboKatz
       IsDataToCollect = false;
     }
 
-
     private bool canTransfer(ModuleScienceExperiment thisExperiment, ScienceData[] containingData)
     {
       if (!thisExperiment.IsRerunnable())
@@ -312,40 +312,46 @@ namespace KerboKatz
       }
       return true;
     }
+
     private void RunScience()
     {
       CheckEVA();
       foreach (ModuleScienceExperiment currentExperiment in experimentList)
       {
+        CheckForDataToCollect(currentExperiment);
         var experiment = ResearchAndDevelopment.GetExperiment(currentExperiment.experimentID);
         var biome = getBiomeForExperiment(experiment);
         var currentScienceSubject = ResearchAndDevelopment.GetExperimentSubject(experiment, currentSituation, currentBody, biome);
         var currentScienceValue = Utilities.Science.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
-        if (canRunExperiment(currentExperiment, experiment, currentScienceValue))
+
+        if (currentExperiment.part.partInfo.manufacturer == "DMagic Orbital Science")
         {
-          if (!canConduct(currentExperiment, experiment))
+          if (!canConduct(currentExperiment, experiment, currentScienceValue))
           {//check if dmagic expriment can be conducted
             continue;
           }
-          if (isExperimentLimitReached(currentExperiment, experiment, currentScienceSubject, ref currentScienceValue))
-          {//check if dmagic experimentLimit is reached
-            continue;
-          }
-          if (DataInContainer(currentScienceSubject, currentExperiment.GetData()))
-          {
-            continue;
-          }
-          Utilities.debug(modName, "Deploying: " + currentScienceSubject.id + "\nScience: " + currentScienceValue);
-
-          DeployExperiment(currentExperiment);
-
-          addToContainer(currentScienceSubject.id);
         }
+        else if (!canRunExperiment(currentExperiment, experiment, currentScienceValue))
+        {
+          continue;
+        }
+        if (isExperimentLimitReached(currentExperiment, experiment, currentScienceSubject, ref currentScienceValue))
+        {//check if dmagic experimentLimit is reached
+          continue;
+        }
+        if (DataInContainer(currentScienceSubject, currentExperiment.GetData()))
+        {
+          continue;
+        }
+        Utilities.debug(modName, "Deploying: " + currentScienceSubject.id + "\nScience: " + currentScienceValue);
+
+        DeployExperiment(currentExperiment);
+
+        addToContainer(currentScienceSubject.id);
         if (canResetExperiment(currentExperiment))
         {
           ResetExperiment(currentExperiment);
         }
-        CheckForDataToCollect(currentExperiment);
       }
     }
 
@@ -403,7 +409,7 @@ namespace KerboKatz
       currentExperiment.Inoperable = false;
     }
 
-    #region try-catch for DMagic Orbital Science //thanks Sephiroth018 for this part
+    #region try-catch for DMagic Orbital Science //thanks Sephiroth018 for help on this part
     private bool isExperimentLimitReached(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment, ScienceSubject currentScienceSubject, ref float currentScienceValue)
     {
       try
@@ -420,10 +426,6 @@ namespace KerboKatz
           else if (experimentNumber > 0)
           {
             addToContainer(currentScienceSubject.id, experimentNumber);
-            /*if (shipCotainsExperiments.ContainsKey(currentScienceSubject.id))
-              shipCotainsExperiments[currentScienceSubject.id] += experimentNumber;
-            else
-              shipCotainsExperiments.Add(currentScienceSubject.id, experimentNumber + 1);*/
             currentScienceValue = Utilities.Science.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
             Utilities.debug(modName, Utilities.LogMode.Log, "Experiment is a DMagic Orbital Science experiment. Science value changed to: " + currentScienceValue);
             if (currentScienceValue < currentSettings.getFloat("scienceCutoff"))
@@ -440,31 +442,43 @@ namespace KerboKatz
       return false;
     }
 
-    private bool canConduct(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment)
+    private bool canConduct(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment, float currentScienceValue)
     {
       try
       {
-        var conductMethod = currentExperiment.GetType().GetMethod("conduct");//thanks Sephiroth018 for this conduct part
+        MethodInfo conductMethod = currentExperiment.GetType().BaseType.GetMethod("canConduct", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy | BindingFlags.InvokeMethod);
+        if (conductMethod == null)
+        {
+          conductMethod = currentExperiment.GetType().GetMethod("canConduct", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy | BindingFlags.InvokeMethod);
+        }
         if (conductMethod != null)
         {
-          Utilities.debug(modName, Utilities.LogMode.Log, "Experiment {0} is a DMagic Orbital Science experiment.", experiment.id);
-
-          var conductResult = (bool)conductMethod.Invoke(null, new object[] { currentExperiment });
+          var conductResult = (bool)conductMethod.Invoke(currentExperiment, null);
 
           if (!conductResult)
           {
-            Utilities.debug(modName, Utilities.LogMode.Log, "Experiment {0} can't be conducted.", experiment.id);
+            Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment {0} can't be conducted.", experiment.id);
             return false;
           }
+          if (canRunExperiment(currentExperiment, experiment, currentScienceValue, true))
+          {
+            Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment {0} can be run.", experiment.id);
+            return true;
+          }
+        }
+        else
+        {
+          Utilities.debug(modName, Utilities.LogMode.Error, experiment.id + ": conductMethod == null");
         }
       }
-      catch (Exception)
+      catch (Exception e)
       {
+        Utilities.debug(modName, Utilities.LogMode.Exception, e.Message);
       }
-      return true;
+      return false;
     }
 
-    #endregion try-catch for DMagic Orbital Science //thanks Sephiroth018 for this part
+    #endregion try-catch for DMagic Orbital Science //thanks Sephiroth018 for help on this part
     private string getBiomeForExperiment(ScienceExperiment experiment)
     {
       if (experiment.BiomeIsRelevantWhile(currentSituation))
@@ -474,36 +488,40 @@ namespace KerboKatz
       return string.Empty;
     }
 
-    private bool canRunExperiment(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment, float currentScienceValue)
+    private bool canRunExperiment(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment, float currentScienceValue, bool DMagic = false)
     {
+      if (!DMagic)
+      {
+        if (!experiment.IsAvailableWhile(currentSituation, currentBody))//
+        {
+          //experiment.mask
+          Utilities.debug(modName, Utilities.LogMode.Debug, currentExperiment.experimentID + ": Experiment isn't available in the current situation: " + currentSituation + "_" + currentBody + "_" + experiment.situationMask);
+          return false;
+        }
+        if (currentExperiment.Inoperable)//
+        {
+          Utilities.debug(modName, Utilities.LogMode.Debug, currentExperiment.experimentID + ": Experiment is inoperable");
+          return false;
+        }
+        if (currentExperiment.Deployed)//
+        {
+          Utilities.debug(modName, Utilities.LogMode.Debug, currentExperiment.experimentID + ": Experiment is deployed");
+          return false;
+        }
+      }
       if (!currentExperiment.rerunnable && !currentSettings.getBool("runOneTimeScience"))
       {
-        Utilities.debug(modName, Utilities.LogMode.Debug, "Runing rerunable experiments is disabled");
-        return false;
-      }
-      if (!experiment.IsAvailableWhile(currentSituation, currentBody))
-      {
-        Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment isn't available in the current situation");
-        return false;
-      }
-      if (currentExperiment.Inoperable)
-      {
-        Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment is inoperable");
-        return false;
-      }
-      if (currentExperiment.Deployed)
-      {
-        Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment is deployed");
+        Utilities.debug(modName, Utilities.LogMode.Debug, currentExperiment.experimentID + ": Runing rerunable experiments is disabled");
         return false;
       }
       if (currentScienceValue < currentSettings.getFloat("scienceCutoff"))
       {
-        Utilities.debug(modName, Utilities.LogMode.Debug, "Science value is less than cutoff threshold: " + currentScienceValue + "<" + currentSettings.getFloat("scienceCutoff"));
+        Utilities.debug(modName, Utilities.LogMode.Debug, currentExperiment.experimentID + ": Science value is less than cutoff threshold: " + currentScienceValue + "<" + currentSettings.getFloat("scienceCutoff"));
         return false;
       }
       if (!experiment.IsUnlocked())
       {
-        Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment is locked");
+        Utilities.debug(modName, Utilities.LogMode.Debug, currentExperiment.experimentID + ": Experiment is locked");
         return false;
       }
 
