@@ -96,12 +96,32 @@ namespace KerboKatz
       runOneTimeScience = currentSettings.getBool("runOneTimeScience");
 
       GameEvents.onCrewOnEva.Add(GoingEva);
+      GameEvents.onCrewBoardVessel.Add(boardingVessel);
       GameEvents.onVesselChange.Add(updateVessel);
       GameEvents.onVesselSituationChange.Add(updateSituation);
       GameEvents.onDominantBodyChange.Add(updateBody);
       setAppLauncherScenes(ApplicationLauncher.AppScenes.FLIGHT);
       updateFrameCheck();
     }
+
+    private void GoingEva(GameEvents.FromToAction<Part, Part> parts)
+    {
+      Utilities.debug(modName, Utilities.LogMode.Debug, "GoingEva");
+      parentVessel = parts.from.vessel;
+      nextUpdate = Planetarium.GetUniversalTime() + 1;
+    }
+
+    private void boardingVessel(GameEvents.FromToAction<Part, Part> parts)
+    {
+      Utilities.debug(modName, Utilities.LogMode.Debug, "boardingVessel");
+      nextUpdate = Planetarium.GetUniversalTime() + 1;
+      currentVessel = parts.to.vessel;
+      resetLists();
+      currentSituation = ScienceUtil.GetExperimentSituation(currentVessel);
+      currentBody = currentVessel.mainBody;
+      updateExperimentList();
+    }
+
 
     private void updateSituation(GameEvents.HostedFromToAction<Vessel, Vessel.Situations> data)
     {
@@ -167,6 +187,7 @@ namespace KerboKatz
     protected override void OnDestroy()
     {
       GameEvents.onCrewOnEva.Remove(GoingEva);
+      GameEvents.onCrewBoardVessel.Remove(boardingVessel);
       GameEvents.onVesselChange.Remove(updateVessel);
       GameEvents.onVesselSituationChange.Remove(updateSituation);
       GameEvents.onDominantBodyChange.Remove(updateBody);
@@ -175,11 +196,6 @@ namespace KerboKatz
         currentSettings.set("showSettings", false);
       }
       base.OnDestroy();
-    }
-
-    private void GoingEva(GameEvents.FromToAction<Part, Part> parts)
-    {
-      parentVessel = parts.from.vessel;
     }
 
     public void Update()
@@ -315,7 +331,10 @@ namespace KerboKatz
 
     private void RunScience()
     {
-      CheckEVA();
+      if (!CheckEVA())
+      {
+        return;
+      }
       foreach (ModuleScienceExperiment currentExperiment in experimentList)
       {
         CheckForDataToCollect(currentExperiment);
@@ -537,7 +556,7 @@ namespace KerboKatz
       return true;
     }
 
-    private void CheckEVA()
+    private bool CheckEVA()
     {
       if (currentVessel.isEVA && kerbalEVAPart == null)
       {
@@ -547,8 +566,9 @@ namespace KerboKatz
 
       if (currentVessel.isEVA && currentSettings.getBool("doEVAonlyIfOnGroundWhenLanded") && (parentVessel.Landed || parentVessel.Splashed) && (kerbalEVAPart.OnALadder || (!currentVessel.Landed && !currentVessel.Splashed)))
       {
-        return;
+        return false;
       }
+      return true;
     }
 
     private bool DataInContainer(ScienceSubject ScienceSubject, ScienceData[] ScienceData)
