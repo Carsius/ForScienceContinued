@@ -1,3 +1,7 @@
+v 1.0.4
+ * Added option to hide experiment result window
+ * Added option to create DMagic Orbital Science results to hide the experiment result window
+ * Fixed more issues with DMagic Orbital Science
 v 1.0.3
  * Fixed restricted EVA-Reports option to work again
  * Fixed issues when boarding a vessel

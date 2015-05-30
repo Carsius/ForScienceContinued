@@ -83,6 +83,8 @@ namespace KerboKatz
       currentSettings.setDefault("transferAll", "false");
       currentSettings.setDefault("dumpDuplicateResults", "false");
       currentSettings.setDefault("resetExperiments", "false");
+      currentSettings.setDefault("hideScienceReports", "true");
+      currentSettings.setDefault("makeScienceForDMagic", "true");
       windowPosition.x = currentSettings.getFloat("windowX");
       windowPosition.y = currentSettings.getFloat("windowY");
 
@@ -94,6 +96,8 @@ namespace KerboKatz
       transferScience = currentSettings.getBool("transferScience");
       doEVAonlyIfOnGroundWhenLanded = currentSettings.getBool("doEVAonlyIfOnGroundWhenLanded");
       runOneTimeScience = currentSettings.getBool("runOneTimeScience");
+      hideScienceReports = currentSettings.getBool("hideScienceReports");
+      makeScienceForDMagic = currentSettings.getBool("makeScienceForDMagic");
 
       GameEvents.onCrewOnEva.Add(GoingEva);
       GameEvents.onCrewBoardVessel.Add(boardingVessel);
@@ -121,7 +125,6 @@ namespace KerboKatz
       currentBody = currentVessel.mainBody;
       updateExperimentList();
     }
-
 
     private void updateSituation(GameEvents.HostedFromToAction<Vessel, Vessel.Situations> data)
     {
@@ -338,21 +341,38 @@ namespace KerboKatz
       foreach (ModuleScienceExperiment currentExperiment in experimentList)
       {
         CheckForDataToCollect(currentExperiment);
+        if (canResetExperiment(currentExperiment))
+        {
+          ResetExperiment(currentExperiment);
+        }
+        var dmagic = false;
         var experiment = ResearchAndDevelopment.GetExperiment(currentExperiment.experimentID);
         var biome = getBiomeForExperiment(experiment);
-        var currentScienceSubject = ResearchAndDevelopment.GetExperimentSubject(experiment, currentSituation, currentBody, biome);
-        var currentScienceValue = Utilities.Science.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
+        ScienceSubject currentScienceSubject;
+        float currentScienceValue;
 
         if (currentExperiment.part.partInfo.manufacturer == "DMagic Orbital Science")
         {
-          if (!canConduct(currentExperiment, experiment, currentScienceValue))
+          if (!canConduct(currentExperiment, experiment))
           {//check if dmagic expriment can be conducted
             continue;
           }
+          getBiomeDMagic(currentExperiment, ref biome);
+          getScienceSubjectAndValue(experiment, biome, out currentScienceSubject, out currentScienceValue);
+          if (!canRunExperiment(currentExperiment, experiment, currentScienceValue, true))
+          {
+            Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment {0} can be run.", experiment.id);
+            continue;
+          }
+          dmagic = true;
         }
-        else if (!canRunExperiment(currentExperiment, experiment, currentScienceValue))
+        else
         {
-          continue;
+          getScienceSubjectAndValue(experiment, biome, out currentScienceSubject, out currentScienceValue);
+          if (!canRunExperiment(currentExperiment, experiment, currentScienceValue))
+          {
+            continue;
+          }
         }
         if (isExperimentLimitReached(currentExperiment, experiment, currentScienceSubject, ref currentScienceValue))
         {//check if dmagic experimentLimit is reached
@@ -364,14 +384,53 @@ namespace KerboKatz
         }
         Utilities.debug(modName, "Deploying: " + currentScienceSubject.id + "\nScience: " + currentScienceValue);
 
-        DeployExperiment(currentExperiment);
-
-        addToContainer(currentScienceSubject.id);
-        if (canResetExperiment(currentExperiment))
+        if (!dmagic && currentSettings.getBool("hideScienceReports"))
         {
-          ResetExperiment(currentExperiment);
+          createScience(currentExperiment);
         }
+        else if (dmagic && currentSettings.getBool("hideScienceReports") && currentSettings.getBool("makeScienceForDMagic"))
+        {
+          createScienceDMagic(currentExperiment, currentScienceSubject, currentScienceValue);
+        }
+        else
+        {
+          DeployExperiment(currentExperiment);
+        }
+        addToContainer(currentScienceSubject.id);
       }
+    }
+
+    private static void createScience(ModuleScienceExperiment currentExperiment)
+    {
+      //Need something like this for DMagic experiments!
+      var stagingSetting = currentExperiment.useStaging;
+      currentExperiment.useStaging = true;//work the way around the staging
+      currentExperiment.OnActive();//run the experiment without causing the report to show up
+      currentExperiment.useStaging = stagingSetting;//set the staging back
+    }
+
+    private void createScienceDMagic(ModuleScienceExperiment currentExperiment, ScienceSubject currentScienceSubject, float currentScienceValue)
+    {
+      var scienceData = new ScienceData(currentScienceValue, currentExperiment.xmitDataScalar, 0, currentScienceSubject.id, currentScienceSubject.title);
+      try
+      {
+        currentExperiment.GetType().InvokeMember("deployEvent", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.IgnoreReturn | System.Reflection.BindingFlags.InvokeMethod, null, currentExperiment, null);
+      }
+      catch (Exception)
+      {
+      }
+      if (!currentExperiment.rerunnable)
+      {
+        currentExperiment.SetInoperable();
+        GameEvents.OnExperimentDeployed.Fire(scienceData);
+      }
+      container.AddData(scienceData);
+    }
+
+    private void getScienceSubjectAndValue(ScienceExperiment experiment, string biome, out ScienceSubject currentScienceSubject, out float currentScienceValue)
+    {
+      currentScienceSubject = ResearchAndDevelopment.GetExperimentSubject(experiment, currentSituation, currentBody, biome);
+      currentScienceValue = Utilities.Science.getScienceValue(shipCotainsExperiments, experiment, currentScienceSubject);
     }
 
     private bool canResetExperiment(ModuleScienceExperiment currentExperiment)
@@ -422,7 +481,7 @@ namespace KerboKatz
       }
       catch (Exception e)
       {
-        Utilities.debug(modName, Utilities.LogMode.Error, "Failed to invoke \"ResetExperiment\" using GetType(), falling back to base type after encountering exception " + e);
+        Utilities.debug(modName, Utilities.LogMode.Error, "Failed to invoke \"ResetExperiment\" using GetType(). " + e);
         currentExperiment.ResetExperiment();
       }
       currentExperiment.Inoperable = false;
@@ -461,7 +520,7 @@ namespace KerboKatz
       return false;
     }
 
-    private bool canConduct(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment, float currentScienceValue)
+    private bool canConduct(ModuleScienceExperiment currentExperiment, ScienceExperiment experiment)
     {
       try
       {
@@ -479,11 +538,7 @@ namespace KerboKatz
             Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment {0} can't be conducted.", experiment.id);
             return false;
           }
-          if (canRunExperiment(currentExperiment, experiment, currentScienceValue, true))
-          {
-            Utilities.debug(modName, Utilities.LogMode.Debug, "Experiment {0} can be run.", experiment.id);
-            return true;
-          }
+          return true;
         }
         else
         {
@@ -497,13 +552,36 @@ namespace KerboKatz
       return false;
     }
 
+    private void getBiomeDMagic(ModuleScienceExperiment currentExperiment, ref string biome)
+    {//getBiome
+      try
+      {
+        MethodInfo getBiomeMethod = currentExperiment.GetType().GetMethod("getBiome", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy | BindingFlags.InvokeMethod);
+        if (getBiomeMethod != null)
+        {
+          biome = (string)getBiomeMethod.Invoke(currentExperiment, new object[] { currentSituation });
+          Utilities.debug(modName, Utilities.LogMode.Debug, "found getBiomeMethod:" + biome);
+        }
+        else
+        {
+          Utilities.debug(modName, Utilities.LogMode.Debug, "getBiomeMethod is null");
+        }
+      }
+      catch (Exception e)
+      {
+        Utilities.debug(modName, Utilities.LogMode.Exception, e.Message);
+      }
+    }
+
     #endregion try-catch for DMagic Orbital Science //thanks Sephiroth018 for help on this part
     private string getBiomeForExperiment(ScienceExperiment experiment)
     {
       if (experiment.BiomeIsRelevantWhile(currentSituation))
       {
+        Utilities.debug(modName, Utilities.LogMode.Debug, experiment.id + ": BiomeIsRelevantWhile: " + currentSituation);
         return currentBiome();
       }
+      Utilities.debug(modName, Utilities.LogMode.Debug, experiment.id + ": BiomeIsNotRelevantWhile: " + currentSituation);
       return string.Empty;
     }
 

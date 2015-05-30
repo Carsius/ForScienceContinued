@@ -24,6 +24,8 @@ namespace KerboKatz
     private int toolbarInt;
     private static int windowID = Utilities.UI.getNewWindowID;
     private bool transferAll;
+    private bool makeScienceForDMagic;
+    private bool hideScienceReports;
 
     private void OnGUI()
     {
@@ -117,6 +119,22 @@ namespace KerboKatz
       {
         resetExperiments = false;
       }
+      if (GUILayout.Toggle(hideScienceReports, new GUIContent("Hide experiments result window", "This option hides all the experiment result windows created by it. This might cause some issues. If you notice any unwanted behaviour please report it in the thread"), toggleStyle))
+      {
+        hideScienceReports = true;
+        if (GUILayout.Toggle(makeScienceForDMagic, new GUIContent("Create results for DMagic", "This option creates experiment results for DMagic Orbital Science experiments in order to hide the results window. This might cause some issues. If you notice any unwanted behaviour please report it in the thread"), toggleStyle))
+        {
+          makeScienceForDMagic = true;
+        }
+        else
+        {
+          makeScienceForDMagic = false;
+        }
+      }
+      else
+      {
+        hideScienceReports = false;
+      }
       if (GUILayout.Toggle(transferScience, new GUIContent("Transfer science to container", "Transfers all the science from experiments to the selected container.\nWARNING: makes experiments unoperable if used with \"Run one-time only science\""), toggleStyle))
       {
         transferScience = true;
@@ -165,6 +183,8 @@ namespace KerboKatz
         currentSettings.set("runOneTimeScience", runOneTimeScience);
         currentSettings.set("transferAll", transferAll);
         currentSettings.set("dumpDuplicateResults", dumpDuplicateResults);
+        currentSettings.set("hideScienceReports", hideScienceReports);
+        currentSettings.set("makeScienceForDMagic", makeScienceForDMagic);
         currentSettings.save();
         currentSettings.set("showSettings", false);
         if (containerList != null)
