@@ -1,3 +1,6 @@
+v 1.1.0
+ * Added option to save settings on a per-craft basis
+ * Removed hardcoded manufacturer name for DMagic Orbital Science
 v 1.0.4
  * Added option to hide experiment result window
  * Added option to create DMagic Orbital Science results to hide the experiment result window

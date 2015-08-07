@@ -19,6 +19,7 @@
 
 using KerboKatz.Extensions;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -49,6 +50,7 @@ namespace KerboKatz
     private Vessel currentVessel = null;
     private Vessel parentVessel;
     private bool hasScientist;
+    private string DMagicManufacturerName;
 
     public ForScienceContinued()
     {
@@ -72,6 +74,20 @@ namespace KerboKatz
       {
         Utilities.debugList.Remove(modName);
       }
+      loadSettings();
+
+      GameEvents.onCrewOnEva.Add(GoingEva);
+      GameEvents.onCrewBoardVessel.Add(boardingVessel);
+      GameEvents.onVesselChange.Add(updateVessel);
+      GameEvents.onVesselSituationChange.Add(updateSituation);
+      GameEvents.onDominantBodyChange.Add(updateBody);
+      setAppLauncherScenes(ApplicationLauncher.AppScenes.FLIGHT);
+      updateFrameCheck();
+      StartCoroutine(checkCraftSettingsFile());
+    }
+
+    private void loadSettings()
+    {
 
       currentSettings.setDefault("scienceCutoff", "2");
       currentSettings.setDefault("spriteAnimationFPS", "25");
@@ -85,6 +101,9 @@ namespace KerboKatz
       currentSettings.setDefault("resetExperiments", "false");
       currentSettings.setDefault("hideScienceReports", "true");
       currentSettings.setDefault("makeScienceForDMagic", "true");
+      currentSettings.setDefault("DMagicManufacturerName", "DMagic");
+      currentSettings.setDefault("usePerCraftSettings", "false");
+
       windowPosition.x = currentSettings.getFloat("windowX");
       windowPosition.y = currentSettings.getFloat("windowY");
 
@@ -98,16 +117,38 @@ namespace KerboKatz
       runOneTimeScience = currentSettings.getBool("runOneTimeScience");
       hideScienceReports = currentSettings.getBool("hideScienceReports");
       makeScienceForDMagic = currentSettings.getBool("makeScienceForDMagic");
-
-      GameEvents.onCrewOnEva.Add(GoingEva);
-      GameEvents.onCrewBoardVessel.Add(boardingVessel);
-      GameEvents.onVesselChange.Add(updateVessel);
-      GameEvents.onVesselSituationChange.Add(updateSituation);
-      GameEvents.onDominantBodyChange.Add(updateBody);
-      setAppLauncherScenes(ApplicationLauncher.AppScenes.FLIGHT);
-      updateFrameCheck();
+      DMagicManufacturerName = currentSettings.getString("DMagicManufacturerName");
+      usePerCraftSettings = currentSettings.getBool("usePerCraftSettings");
+      
     }
-
+    IEnumerator checkCraftSettingsFile()
+    {
+      while (true)
+      {
+        if (FlightGlobals.ActiveVessel != null)
+          if (!FlightGlobals.ActiveVessel.vesselName.IsNullOrWhiteSpace())
+            break;
+        yield return null;
+      }
+      var usePerCraftSettings_global = usePerCraftSettings;
+      if (currentSettings.saveFileExists(modName,FlightGlobals.ActiveVessel.vesselName + "Settings"))
+      {
+        currentSettings.load(modName, FlightGlobals.ActiveVessel.vesselName + "Settings", modName);
+        loadSettings();
+        if (!usePerCraftSettings && !usePerCraftSettings_global)
+        {
+          currentSettings.load(modName, "settings", modName);
+          loadSettings();
+          Utilities.debug(modName, "true");
+        }
+        else
+          Utilities.debug(modName, "false");
+      }
+    }
+    private void createPerShipSettings()
+    {
+      currentSettings.load(modName, FlightGlobals.ActiveVessel.vesselName + "Settings", modName);
+    }
     private void GoingEva(GameEvents.FromToAction<Part, Part> parts)
     {
       Utilities.debug(modName, Utilities.LogMode.Debug, "GoingEva");
@@ -351,7 +392,7 @@ namespace KerboKatz
         ScienceSubject currentScienceSubject;
         float currentScienceValue;
 
-        if (currentExperiment.part.partInfo.manufacturer == "DMagic Orbital Science")
+        if (currentExperiment.part.partInfo.manufacturer == DMagicManufacturerName)
         {
           if (!canConduct(currentExperiment, experiment))
           {//check if dmagic expriment can be conducted

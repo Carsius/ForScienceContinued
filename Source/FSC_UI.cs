@@ -26,6 +26,7 @@ namespace KerboKatz
     private bool transferAll;
     private bool makeScienceForDMagic;
     private bool hideScienceReports;
+    private bool usePerCraftSettings;
 
     private void OnGUI()
     {
@@ -169,6 +170,14 @@ namespace KerboKatz
         }
         transferScience = false;
       }
+      if (GUILayout.Toggle(usePerCraftSettings, new GUIContent("Use per-craft settings", "If this is turned on each craft will have its own settings file with different values."), toggleStyle))
+      {
+        usePerCraftSettings = true;
+      }
+      else
+      {
+        usePerCraftSettings = false;
+      }
       Utilities.UI.createOptionSwitcher("Use:", Toolbar.toolbarOptions, ref toolbarSelected);
       GUILayout.BeginHorizontal();
       GUILayout.FlexibleSpace();
@@ -185,8 +194,15 @@ namespace KerboKatz
         currentSettings.set("dumpDuplicateResults", dumpDuplicateResults);
         currentSettings.set("hideScienceReports", hideScienceReports);
         currentSettings.set("makeScienceForDMagic", makeScienceForDMagic);
-        currentSettings.save();
+        var usePerCraftSettings_Temp = currentSettings.getBool("usePerCraftSettings");
+        currentSettings.set("usePerCraftSettings", usePerCraftSettings);
         currentSettings.set("showSettings", false);
+        currentSettings.save();
+        if (usePerCraftSettings != usePerCraftSettings_Temp)
+        {
+          createPerShipSettings();
+          currentSettings.save();
+        }
         if (containerList != null)
           container = containerList[toolbarInt];
 
