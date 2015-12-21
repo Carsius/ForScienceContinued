@@ -666,7 +666,7 @@ namespace KerboKatz
       var ModuleAnimateGeneric = currentExperiment.part.FindModuleImplementing<ModuleAnimateGeneric>();
       if (ModuleAnimateGeneric != null)
       {
-        if (ModuleAnimateGeneric.status != "Locked")
+        if (ModuleAnimateGeneric.aniState != "LOCKED")
         {
           Utilities.debug(modName, Utilities.LogMode.Debug, "Animation status isn't locked:" + ModuleAnimateGeneric.status + "_" + currentExperiment.part.name);
           return false;
